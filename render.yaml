@@ -1,0 +1,22 @@
+# Render blueprint — https://render.com/docs/blueprint-spec
+# Push this repo to GitHub, then in Render: New > Blueprint > connect the repo.
+#
+# NOTE: if you push the contents of smart-traffic-management-system/ as its
+# OWN repo, delete the `rootDir` line below.
+services:
+  - type: web
+    name: smart-traffic-ai
+    runtime: python
+    rootDir: smart-traffic-management-system
+    plan: free
+    buildCommand: >
+      pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu &&
+      pip install --no-cache-dir -r requirements.txt
+    startCommand: python backend/app.py
+    envVars:
+      - key: FLASK_DEBUG
+        value: "0"
+      # Keep-alive: self-pings /api/keepalive every 10 min so the
+      # free service never sees 15 min of idle (see README).
+      - key: KEEPALIVE_ENABLED
+        value: "1"

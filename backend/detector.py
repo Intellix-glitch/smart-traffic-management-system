@@ -13,6 +13,24 @@ VEHICLE_CLASSES = {
 }
 
 
+def classify_density(count: int) -> str:
+
+    """
+    Map a vehicle count to a traffic-density level
+    (shared by the detector and the analytics endpoint)
+    """
+
+    if count < 10:
+
+        return "LOW"
+
+    if count < 30:
+
+        return "MEDIUM"
+
+    return "HIGH"
+
+
 class VehicleDetector:
 
     def __init__(self, model_path="models/yolov8n.pt"):
@@ -106,14 +124,7 @@ class VehicleDetector:
         count = len(detections)
 
         # Traffic density analysis
-        if count < 10:
-            density = "LOW"
-
-        elif count < 30:
-            density = "MEDIUM"
-
-        else:
-            density = "HIGH"
+        density = classify_density(count)
 
         # FPS calculation
         fps = 1 / (time.time() - start_time)

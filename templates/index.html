@@ -58,11 +58,54 @@
            src="/static/img/placeholder.svg" alt="{{ dir }} feed"/>
       <div class="camera-overlay">
         <span id="count-{{ dir | lower }}">Vehicles: 0</span>
+        <span id="density-{{ dir | lower }}" class="density-chip">—</span>
         <span id="timer-{{ dir | lower }}">Green: 0s</span>
+        <span id="fps-{{ dir | lower }}" class="fps-chip">—</span>
       </div>
     </div>
   </div>
   {% endfor %}
+</section>
+
+<!-- ── Traffic insights ──────────────────────────────────── -->
+<section class="insights-section">
+  <div class="chart-card">
+    <h3>Congestion level</h3>
+    <div class="congestion-body">
+      <span class="congestion-badge" id="congestion-badge">—</span>
+      <div class="congestion-meter">
+        <div class="congestion-fill" id="congestion-fill"></div>
+      </div>
+      <span class="congestion-num" id="congestion-index">0%</span>
+    </div>
+  </div>
+  <div class="chart-card">
+    <h3>Lane load — live</h3>
+    <div id="lane-load"></div>
+  </div>
+  <div class="chart-card">
+    <h3>Traffic forecast — next 60 s</h3>
+    <div id="forecast-list"></div>
+    <div class="forecast-summary" id="forecast-summary"></div>
+  </div>
+  <div class="chart-card">
+    <h3>Insights</h3>
+    <ul class="insight-list" id="insight-list"></ul>
+  </div>
+  <div class="chart-card">
+    <h3>Stream settings</h3>
+    <div class="setting-group">
+      <span class="setting-label">Inference resolution</span>
+      <div class="seg" id="res-seg">
+        <button class="seg-btn" data-width="360">360</button>
+        <button class="seg-btn active" data-width="480">480</button>
+        <button class="seg-btn" data-width="640">640</button>
+        <button class="seg-btn" data-width="960">960</button>
+      </div>
+      <span class="setting-hint">lower = smoother streams</span>
+    </div>
+    <div id="lane-settings"></div>
+  </div>
 </section>
 
 <!-- ── Analytics ─────────────────────────────────────────── -->

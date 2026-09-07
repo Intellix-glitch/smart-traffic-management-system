@@ -128,8 +128,11 @@ DIRS.forEach(dir => {
     // Update overlay labels
     document.getElementById(`count-${dir}`).textContent =
       `Vehicles: ${data.count}`;
+    setDensity(document.getElementById(`density-${dir}`), data.density);
     document.getElementById(`timer-${dir}`).textContent =
       `Green: ${data.green_sec}s`;
+    const fpsEl = document.getElementById(`fps-${dir}`);
+    if (fpsEl) fpsEl.textContent = data.fps ? data.fps + " fps" : "—";
 
     // Update signal pill
     const pill = document.getElementById(`pill-${dir}`);
@@ -191,6 +194,167 @@ socket.on("signal_update", status => {
   }
 });
 
+// ── Density + analytics ────────────────────────────────
+const DENSITY_CLASS = { LOW: "d-low", MEDIUM: "d-medium", HIGH: "d-high" };
+
+function setDensity(el, density) {
+  if (!el) return;
+  const d = (density || "—").toUpperCase();
+  el.textContent = d;
+  el.className = "density-chip" + (DENSITY_CLASS[d] ? " " + DENSITY_CLASS[d] : "");
+}
+
+function renderCongestion(data) {
+  const badge = document.getElementById("congestion-badge");
+  const fill  = document.getElementById("congestion-fill");
+  const idx   = document.getElementById("congestion-index");
+
+  const d = data.overall_density || "—";
+  badge.textContent = d;
+  badge.className = "congestion-badge" +
+    (DENSITY_CLASS[d] ? " " + DENSITY_CLASS[d] : "");
+
+  const ci = data.congestion_index || 0;
+  fill.style.width = ci + "%";
+  fill.style.background =
+    ci >= 67 ? "#ef4444" : ci >= 34 ? "#f59e0b" : "#22c55e";
+  idx.textContent = ci + "%";
+}
+
+function renderLaneLoad(data) {
+  const wrap = document.getElementById("lane-load");
+  const dirs = data.directions || [];
+
+  wrap.innerHTML = dirs.map(dir => {
+    const cls = DENSITY_CLASS[dir.density] ? " " + DENSITY_CLASS[dir.density] : "";
+    return `
+      <div class="lane-row">
+        <span class="lane-name">${dir.direction}</span>
+        <span class="lane-count">${dir.count}</span>
+        <div class="lane-share-track">
+          <div class="lane-share-fill" style="width:${dir.share_pct}%"></div>
+        </div>
+        <span class="lane-share-pct">${dir.share_pct}%</span>
+      </div>`;
+  }).join("") || `<div class="lane-row"><span class="lane-name">—</span></div>`;
+}
+
+function renderInsights(data) {
+  const list = document.getElementById("insight-list");
+  const items = data.insights || [];
+  list.innerHTML = items.map(t => `<li>${t}</li>`).join("") ||
+    `<li>Start the system to begin live traffic analysis.</li>`;
+}
+
+// ── Forecast ────────────────────────────────────────────
+function renderForecast(fc) {
+  const list = document.getElementById("forecast-list");
+  const summary = document.getElementById("forecast-summary");
+  if (!list) return;
+
+  if (!fc) { list.innerHTML = ""; summary.textContent = ""; return; }
+
+  const dirs = fc.directions || [];
+  list.innerHTML = dirs.map(f => {
+    let arrow = "→", cls = "flat";
+    if (f.trend === "rising")  { arrow = "▲"; cls = "up"; }
+    else if (f.trend === "falling") { arrow = "▼"; cls = "down"; }
+    else if (f.trend === "warming up") { arrow = "…"; cls = "flat"; }
+
+    const pred = f.predicted == null
+      ? `<span class="fc-to warm">—</span>`
+      : `<span class="fc-to">${f.predicted}</span>`;
+
+    return `
+      <div class="fc-row">
+        <span class="fc-name">${f.direction}</span>
+        <span class="fc-from">${f.latest} veh</span>
+        <span class="fc-arrow ${cls}">${arrow}</span>
+        ${pred}
+      </div>`;
+  }).join("") || `<div class="fc-row"><span class="fc-name">—</span></div>`;
+
+  summary.textContent = fc.summary || "";
+}
+
+// ── Stream settings ────────────────────────────────────
+async function loadSettings() {
+  let data;
+  try {
+    const res = await fetch("/api/settings");
+    data = await res.json();
+  } catch { return; }
+
+  const seg = document.getElementById("res-seg");
+  [...seg.querySelectorAll(".seg-btn")].forEach(b =>
+    b.classList.toggle("active", Number(b.dataset.width) === data.infer_width));
+
+  const wrap = document.getElementById("lane-settings");
+  const lanes = data.lanes || {};
+  wrap.innerHTML = DIRS.map(dir => {
+    const c = lanes[dir] || { enabled: true, max_fps: 0 };
+    const options = [0, 1, 2, 4, 8]
+      .map(v => `<option value="${v}" ${Number(c.max_fps) === v ? "selected" : ""}>` +
+        (v ? v + " fps" : "Auto") + "</option>")
+      .join("");
+    return `
+      <div class="lane-set-row" data-dir="${dir}">
+        <span class="lane-set-name">${dir[0].toUpperCase() + dir.slice(1)}</span>
+        <label class="lane-enable-label">
+          <input type="checkbox" class="lane-enable" ${c.enabled ? "checked" : ""}> Live
+        </label>
+        <select class="lane-fps">${options}</select>
+      </div>`;
+  }).join("");
+}
+
+function applySettings(payload) {
+  fetch("/api/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  }).catch(() => {});
+}
+
+function bindSettings() {
+  const seg = document.getElementById("res-seg");
+  seg.addEventListener("click", e => {
+    const btn = e.target.closest(".seg-btn");
+    if (!btn) return;
+    [...seg.querySelectorAll(".seg-btn")].forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    applySettings({ infer_width: Number(btn.dataset.width) });
+  });
+
+  const wrap = document.getElementById("lane-settings");
+  wrap.addEventListener("change", e => {
+    const row = e.target.closest(".lane-set-row");
+    if (!row) return;
+    const dir = row.dataset.dir;
+    applySettings({
+      lanes: {
+        [dir]: {
+          enabled: row.querySelector(".lane-enable").checked,
+          max_fps: Number(row.querySelector(".lane-fps").value)
+        }
+      }
+    });
+  });
+}
+
+async function loadAnalytics() {
+  let data;
+  try {
+    const res = await fetch("/api/analytics");
+    data = await res.json();
+  } catch { return; }
+
+  renderCongestion(data);
+  renderLaneLoad(data);
+  renderForecast(data.forecast);
+  renderInsights(data);
+}
+
 // ── REST helpers ───────────────────────────────────────
 async function startSystem() {
 
@@ -238,6 +402,12 @@ async function stopSystem() {
         ).innerText =
             "Green: 0s";
 
+        const fpsEl = document.getElementById(
+            `fps-${dir}`
+        );
+
+        if (fpsEl) fpsEl.innerText = "—";
+
         const pill = document.getElementById(
             `pill-${dir}`
         );
@@ -276,5 +446,9 @@ async function loadHourly() {
 // ── Init ───────────────────────────────────────────────
 loadHourly();
 setInterval(loadHourly, 60_000);   // refresh hourly chart every minute
+loadAnalytics();
+setInterval(loadAnalytics, 3_000); // live density + insights every 3s
+loadSettings();
+bindSettings();
 window.startSystem = startSystem;
 window.stopSystem = stopSystem;
